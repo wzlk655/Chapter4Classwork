@@ -12,9 +12,17 @@ import android.widget.ImageView;
 
 import com.bumptech.glide.Glide;
 import com.bytedance.android.lesson.restapi.solution.bean.Cat;
+import com.bytedance.android.lesson.restapi.solution.newtork.ICatService;
+import com.bytedance.android.lesson.restapi.solution.newtork.RetrofitManager;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+import retrofit2.Retrofit;
 
 import static android.support.v7.widget.RecyclerView.Adapter;
 import static android.support.v7.widget.RecyclerView.ViewHolder;
@@ -47,8 +55,8 @@ public class Solution2C1Activity extends AppCompatActivity {
                 ImageView iv = (ImageView) viewHolder.itemView;
 
                 // TODO-C1 (4) Uncomment these 2 lines, assign image url of Cat to this url variable
-//                String url = mCats.get(i).;
-//                Glide.with(iv.getContext()).load(url).into(iv);
+                String url = mCats.get(i).getUrl();
+                Glide.with(iv.getContext()).load(url).into(iv);
             }
 
             @Override public int getItemCount() {
@@ -70,7 +78,18 @@ public class Solution2C1Activity extends AppCompatActivity {
         // TODO-C1 (3) Send request for 5 random cats here, don't forget to use {@link retrofit2.Call#enqueue}
         // Call restoreBtn() and loadPics(response.body()) if success
         // Call restoreBtn() if failure
+        getResponseWithRetrofitAsync(new Callback<Cat[]>() {
+            @Override
+            public void onResponse(Call<Cat[]> call, Response<Cat[]> response) {
+                restoreBtn();
+                loadPics(Arrays.asList(response.body()));
+            }
 
+            @Override
+            public void onFailure(Call<Cat[]> call, Throwable t) {
+                restoreBtn();
+            }
+        });
     }
 
     private void loadPics(List<Cat> cats) {
@@ -81,5 +100,10 @@ public class Solution2C1Activity extends AppCompatActivity {
     private void restoreBtn() {
         mBtn.setText(R.string.request_data);
         mBtn.setEnabled(true);
+    }
+
+    public static void  getResponseWithRetrofitAsync(Callback<Cat[]> callback){
+        Retrofit retrofit= RetrofitManager.get("https://api.thecatapi.com/");
+        retrofit.create(ICatService.class).randomCat().enqueue(callback);
     }
 }

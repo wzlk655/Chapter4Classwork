@@ -12,8 +12,16 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.Toast;
 
+import com.bumptech.glide.Glide;
+import com.bytedance.android.lesson.restapi.solution.bean.Cat;
 import com.bytedance.android.lesson.restapi.solution.bean.Feed;
+import com.bytedance.android.lesson.restapi.solution.bean.FeedResponse;
+import com.bytedance.android.lesson.restapi.solution.bean.PostVideoResponse;
+import com.bytedance.android.lesson.restapi.solution.newtork.ICatService;
+import com.bytedance.android.lesson.restapi.solution.newtork.IMiniDouyinService;
+import com.bytedance.android.lesson.restapi.solution.newtork.RetrofitManager;
 import com.bytedance.android.lesson.restapi.solution.utils.ResourceUtils;
 
 import java.io.File;
@@ -23,6 +31,10 @@ import java.util.List;
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
 import okhttp3.RequestBody;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+import retrofit2.Retrofit;
 
 public class Solution2C2Activity extends AppCompatActivity {
 
@@ -32,13 +44,19 @@ public class Solution2C2Activity extends AppCompatActivity {
     private RecyclerView mRv;
     private List<Feed> mFeeds = new ArrayList<>();
     public Uri mSelectedImage;
+    public MultipartBody.Part mCoverImage;
     private Uri mSelectedVideo;
+    private MultipartBody.Part mVideo;
     public Button mBtn;
     private Button mBtnRefresh;
+    private String mstudent_id;
+    private String muser_name;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        muser_name="Wu Zhengliang";
+        mstudent_id="1120171220";
         setContentView(R.layout.activity_solution2_c2);
         initRecyclerView();
         initBtns();
@@ -66,6 +84,12 @@ public class Solution2C2Activity extends AppCompatActivity {
         });
 
         mBtnRefresh = findViewById(R.id.btn_refresh);
+        mBtnRefresh.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                fetchFeed();
+            }
+        });
     }
 
     private void initRecyclerView() {
@@ -85,8 +109,8 @@ public class Solution2C2Activity extends AppCompatActivity {
                 ImageView iv = (ImageView) viewHolder.itemView;
 
                 // TODO-C2 (10) Uncomment these 2 lines, assign image url of Feed to this url variable
-//                String url = mFeeds.get(i).;
-//                Glide.with(iv.getContext()).load(url).into(iv);
+                String url = mFeeds.get(i).getCover_image();
+                Glide.with(iv.getContext()).load(url).into(iv);
             }
 
             @Override public int getItemCount() {
@@ -97,11 +121,17 @@ public class Solution2C2Activity extends AppCompatActivity {
 
     public void chooseImage() {
         // TODO-C2 (4) Start Activity to select an image
+        Intent intent = new Intent();    intent.setType("image/*");
+        intent.setAction(Intent.ACTION_GET_CONTENT);
+        startActivityForResult(Intent.createChooser(intent, "Select Picture"),PICK_IMAGE);
     }
 
 
     public void chooseVideo() {
         // TODO-C2 (5) Start Activity to select a video
+        Intent intent = new Intent();    intent.setType("video/*");
+        intent.setAction(Intent.ACTION_GET_CONTENT);
+        startActivityForResult(Intent.createChooser(intent, "Select Video"),PICK_VIDEO);
     }
 
     @Override
@@ -115,10 +145,12 @@ public class Solution2C2Activity extends AppCompatActivity {
             if (requestCode == PICK_IMAGE) {
                 mSelectedImage = data.getData();
                 Log.d(TAG, "selectedImage = " + mSelectedImage);
+                mCoverImage = getMultipartFromUri("cover_image", mSelectedImage);
                 mBtn.setText(R.string.select_a_video);
             } else if (requestCode == PICK_VIDEO) {
                 mSelectedVideo = data.getData();
                 Log.d(TAG, "mSelectedVideo = " + mSelectedVideo);
+                mVideo = getMultipartFromUri("video", mSelectedVideo);
                 mBtn.setText(R.string.post_it);
             }
         }
@@ -137,19 +169,73 @@ public class Solution2C2Activity extends AppCompatActivity {
 
         // TODO-C2 (6) Send Request to post a video with its cover image
         // if success, make a text Toast and show
+        getPostResponseWithRetrofitAsync(new Callback<PostVideoResponse>() {
+            @Override
+            public void onResponse(Call<PostVideoResponse> call, Response<PostVideoResponse> response) {
+                //Toast.makeText(Solution2C2Activity.this, "上传成功！", Toast.LENGTH_LONG).show();
+                try{
+                    Toast.makeText(Solution2C2Activity.this, "上传成功！", Toast.LENGTH_LONG).show();
+                }catch (Exception e){
+
+                }
+                resetmBtn();
+            }
+
+            @Override
+            public void onFailure(Call<PostVideoResponse> call, Throwable t) {
+                Toast.makeText(Solution2C2Activity.this,"上传失败！",Toast.LENGTH_SHORT).show();
+                resetmBtn();
+            }
+        }, mstudent_id, muser_name, mCoverImage, mVideo);
     }
 
-    public void fetchFeed(View view) {
+    public void fetchFeed() {
         mBtnRefresh.setText("requesting...");
         mBtnRefresh.setEnabled(false);
 
         // TODO-C2 (9) Send Request to fetch feed
         // if success, assign data to mFeeds and call mRv.getAdapter().notifyDataSetChanged()
         // don't forget to call resetRefreshBtn() after response received
+        getFeedResponseWithRetrofitAsync(new Callback<FeedResponse>() {
+            @Override
+            public void onResponse(Call<FeedResponse> call, Response<FeedResponse> response) {
+                mFeeds = response.body().getFeed();
+                Log.d(TAG,"data fetched");
+                mRv.getAdapter().notifyDataSetChanged();
+                Log.d(TAG,"view refreshed");
+                resetRefreshBtn();
+            }
+
+            @Override
+            public void onFailure(Call<FeedResponse> call, Throwable t) {
+                resetRefreshBtn();
+            }
+        });
     }
 
     private void resetRefreshBtn() {
         mBtnRefresh.setText(R.string.refresh_feed);
         mBtnRefresh.setEnabled(true);
+    }
+
+    private void resetmBtn(){
+        mBtn.setText("select an image");
+        mBtn.setEnabled(true);
+    }
+
+    public static void  getPostResponseWithRetrofitAsync(
+            Callback<PostVideoResponse> callback,
+            String student_id,
+            String user_name,
+            MultipartBody.Part cover_image,
+            MultipartBody.Part video){
+        Retrofit retrofit= RetrofitManager.get("http://10.108.10.39:8080/");
+        retrofit.create(IMiniDouyinService.class).createVideo(
+        student_id, user_name, cover_image, video).enqueue(callback);
+    }
+
+    public static void getFeedResponseWithRetrofitAsync(Callback<FeedResponse> callback){
+        Retrofit retrofit=RetrofitManager.get("http://10.108.10.39:8080/");
+        retrofit.create(IMiniDouyinService.class).allFeed().enqueue(callback);
     }
 }
